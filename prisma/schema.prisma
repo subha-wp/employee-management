@@ -1,0 +1,134 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // Hashed password
+  firstName String
+  lastName  String
+  role      Role     @default(EMPLOYEE)
+  department String
+  position  String
+  avatar    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  timeEntries    TimeEntry[]
+  assignedTasks  Task[]       @relation("AssignedTasks")
+  createdTasks   Task[]       @relation("CreatedTasks")
+  managedDepts   Department[] @relation("DepartmentManager")
+  loginSessions  LoginSession[]
+
+  @@map("employees")
+}
+
+model TimeEntry {
+  id         String    @id @default(cuid())
+  employeeId String
+  clockIn    DateTime
+  clockOut   DateTime?
+  latitude   Float
+  longitude  Float
+  address    String?
+  notes      String?
+  totalHours Float?
+  status     TimeStatus @default(ACTIVE)
+  createdAt  DateTime   @default(now())
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("time_entries")
+}
+
+model Task {
+  id             String     @id @default(cuid())
+  title          String
+  description    String
+  assignedTo     String
+  assignedBy     String
+  priority       Priority   @default(MEDIUM)
+  status         TaskStatus @default(PENDING)
+  dueDate        DateTime
+  completedAt    DateTime?
+  estimatedHours Float?
+  actualHours    Float?
+  tags           String[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Relations
+  assignedEmployee Employee @relation("AssignedTasks", fields: [assignedTo], references: [id], onDelete: Cascade)
+  createdByEmployee Employee @relation("CreatedTasks", fields: [assignedBy], references: [id], onDelete: Cascade)
+
+  @@map("tasks")
+}
+
+model Department {
+  id            String @id @default(cuid())
+  name          String @unique
+  description   String
+  managerId     String
+  employeeCount Int    @default(0)
+
+  // Relations
+  manager Employee @relation("DepartmentManager", fields: [managerId], references: [id])
+
+  @@map("departments")
+}
+
+model LoginSession {
+  id         String    @id @default(cuid())
+  employeeId String
+  loginTime  DateTime  @default(now())
+  logoutTime DateTime?
+  ipAddress  String
+  userAgent  String
+  latitude   Float?
+  longitude  Float?
+  address    String?
+  isActive   Boolean   @default(true)
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("login_sessions")
+}
+
+// Enums
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TimeStatus {
+  ACTIVE
+  COMPLETED
+}
