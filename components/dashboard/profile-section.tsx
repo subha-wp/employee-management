@@ -1,25 +1,29 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { useAuth } from "@/contexts/auth-context"
-import { User, Mail, Building, Calendar, Edit } from "lucide-react"
-import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/auth-context";
+import { User, Mail, Building, Calendar, Edit } from "lucide-react";
+import { useState } from "react";
 
 export function ProfileSection() {
-  const { employee } = useAuth()
-  const [isEditing, setIsEditing] = useState(false)
+  const { employee } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
 
-  if (!employee) return null
+  if (!employee) return null;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900">Profile</h1>
-        <Button variant="outline" onClick={() => setIsEditing(!isEditing)} className="gap-2 bg-transparent">
+        <Button
+          variant="outline"
+          onClick={() => setIsEditing(!isEditing)}
+          className="gap-2 bg-transparent"
+        >
           <Edit className="w-4 h-4" />
           {isEditing ? "Cancel" : "Edit Profile"}
         </Button>
@@ -51,7 +55,9 @@ export function ProfileSection() {
             </div>
             <div className="flex items-center gap-3 text-sm">
               <Calendar className="w-4 h-4 text-slate-500" />
-              <span className="text-slate-700">Joined {employee.createdAt.toLocaleDateString()}</span>
+              <span className="text-slate-700">
+                Joined {new Date(employee.createdAt).toLocaleDateString()}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -74,7 +80,11 @@ export function ProfileSection() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue={employee.email} />
+                  <Input
+                    id="email"
+                    type="email"
+                    defaultValue={employee.email}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="position">Position</Label>
@@ -91,28 +101,42 @@ export function ProfileSection() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <Label className="text-sm font-medium text-slate-700">First Name</Label>
+                  <Label className="text-sm font-medium text-slate-700">
+                    First Name
+                  </Label>
                   <p className="mt-1 text-slate-900">{employee.firstName}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-700">Last Name</Label>
+                  <Label className="text-sm font-medium text-slate-700">
+                    Last Name
+                  </Label>
                   <p className="mt-1 text-slate-900">{employee.lastName}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-700">Email Address</Label>
+                  <Label className="text-sm font-medium text-slate-700">
+                    Email Address
+                  </Label>
                   <p className="mt-1 text-slate-900">{employee.email}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-700">Position</Label>
+                  <Label className="text-sm font-medium text-slate-700">
+                    Position
+                  </Label>
                   <p className="mt-1 text-slate-900">{employee.position}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-700">Department</Label>
+                  <Label className="text-sm font-medium text-slate-700">
+                    Department
+                  </Label>
                   <p className="mt-1 text-slate-900">{employee.department}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-700">Employee ID</Label>
-                  <p className="mt-1 text-slate-900">EMP-{employee.id.padStart(4, "0")}</p>
+                  <Label className="text-sm font-medium text-slate-700">
+                    Employee ID
+                  </Label>
+                  <p className="mt-1 text-slate-900">
+                    EMP-{employee.id.padStart(4, "0")}
+                  </p>
                 </div>
               </div>
             )}
@@ -147,5 +171,5 @@ export function ProfileSection() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
