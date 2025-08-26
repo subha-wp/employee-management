@@ -3,8 +3,6 @@
 import type React from "react";
 import { createContext, useContext, useState, useEffect } from "react";
 import type { Employee } from "@prisma/client";
-import { dataManager } from "@/lib/data-prisma";
-import { LocationManager } from "@/lib/location";
 
 interface AuthContextType {
   employee: Omit<Employee, "password"> | null;
@@ -50,49 +48,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
 
     try {
-      const authenticatedEmployee = await dataManager.validateEmployee(
-        email,
-        password
-      );
-
-      if (!authenticatedEmployee) {
-        setIsLoading(false);
-        return { success: false, error: "Invalid email or password" };
-      }
-
       // Get location for login tracking
-      const location = await LocationManager.getCurrentLocation();
+      const location = await new Promise<{
+        latitude: number;
+        longitude: number;
+        address?: string;
+      } | null>((resolve) => {
+        if (!navigator.geolocation) {
+          resolve(null);
+          return;
+        }
 
-      const loginSession = await dataManager.createLoginSession({
-        employeeId: authenticatedEmployee.id,
-        ipAddress: "127.0.0.1", // In production, get real IP
-        userAgent: navigator.userAgent,
-        latitude: location?.latitude,
-        longitude: location?.longitude,
-        address: location?.address,
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              address: `${position.coords.latitude.toFixed(
+                4
+              )}, ${position.coords.longitude.toFixed(4)}`,
+            });
+          },
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
       });
 
-      if (location) {
-        await dataManager.createTimeEntry({
-          employeeId: authenticatedEmployee.id,
-          clockIn: new Date(),
-          latitude: location.latitude,
-          longitude: location.longitude,
-          address: location.address,
-          notes: "Automatic clock-in on login",
-        });
+      // Login via API
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          location,
+          userAgent: navigator.userAgent,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        setIsLoading(false);
+        return { success: false, error: result.error || "Login failed" };
       }
 
       const newSessionId = `session_${Date.now()}_${Math.random()}`;
       localStorage.setItem("employee_session", newSessionId);
-      localStorage.setItem(
-        "employee_data",
-        JSON.stringify(authenticatedEmployee)
-      );
-      localStorage.setItem("login_session_id", loginSession.id);
+      localStorage.setItem("employee_data", JSON.stringify(result.employee));
+      localStorage.setItem("login_session_id", result.loginSession.id);
 
       setSessionId(newSessionId);
-      setEmployee(authenticatedEmployee);
+      setEmployee(result.employee);
       setIsLoading(false);
 
       return { success: true };
@@ -106,23 +115,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     if (employee) {
       try {
-        const activeTimeEntry = await dataManager.getActiveTimeEntry(
-          employee.id
-        );
-        if (activeTimeEntry) {
-          const now = new Date();
-          const clockInTime = new Date(activeTimeEntry.clockIn);
-          const totalHours =
-            (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
-
-          await dataManager.updateTimeEntry(activeTimeEntry.id, {
-            clockOut: now,
-            totalHours: Math.round(totalHours * 100) / 100,
-            status: "COMPLETED",
-          });
-        }
-
-        await dataManager.endLoginSession(employee.id);
+        // Logout via API
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            employeeId: employee.id,
+          }),
+        });
       } catch (error) {
         console.error("Logout error:", error);
       }

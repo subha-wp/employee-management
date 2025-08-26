@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { setupAdminUser, setupSampleData } from "@/lib/setup-admin";
 import {
   CheckCircle,
   AlertCircle,
@@ -30,12 +29,36 @@ export default function SetupPage() {
     setSetupStatus({ admin: false, samples: false });
 
     try {
-      // Setup admin user
-      await setupAdminUser();
+      // Setup admin user via API
+      const adminResponse = await fetch("/api/setup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "setup-admin" }),
+      });
+
+      const adminResult = await adminResponse.json();
+      if (!adminResult.success) {
+        throw new Error(adminResult.error || "Failed to setup admin user");
+      }
+
       setSetupStatus((prev) => ({ ...prev, admin: true }));
 
-      // Setup sample data
-      await setupSampleData();
+      // Setup sample data via API
+      const samplesResponse = await fetch("/api/setup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "setup-samples" }),
+      });
+
+      const samplesResult = await samplesResponse.json();
+      if (!samplesResult.success) {
+        throw new Error(samplesResult.error || "Failed to setup sample data");
+      }
+
       setSetupStatus((prev) => ({ ...prev, samples: true }));
     } catch (error) {
       console.error("Setup failed:", error);
