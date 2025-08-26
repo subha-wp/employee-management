@@ -24,8 +24,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/auth-context";
-import { DataManager } from "@/lib/data";
-import type { Task } from "@/lib/types";
 import {
   Plus,
   Search,
@@ -40,6 +38,33 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+interface Task {
+  id: string;
+  title: string;
+  description: string;
+  assignedTo: string;
+  assignedBy: string;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+  dueDate: string;
+  completedAt?: string;
+  estimatedHours?: number;
+  actualHours?: number;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  assignedEmployee?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  createdByEmployee?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
 export function TaskManagement() {
   const { employee } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -51,9 +76,21 @@ export function TaskManagement() {
 
   useEffect(() => {
     if (employee) {
-      const employeeTasks = DataManager.getTasksByEmployee(employee.id);
-      setTasks(employeeTasks);
-      setFilteredTasks(employeeTasks);
+      const loadTasks = async () => {
+        try {
+          const response = await fetch(`/api/tasks?employeeId=${employee.id}`);
+          const result = await response.json();
+
+          if (result.success) {
+            setTasks(result.tasks);
+            setFilteredTasks(result.tasks);
+          }
+        } catch (error) {
+          console.error("Failed to load tasks:", error);
+        }
+      };
+
+      loadTasks();
     }
   }, [employee]);
 
@@ -82,61 +119,81 @@ export function TaskManagement() {
     setFilteredTasks(filtered);
   }, [tasks, searchTerm, statusFilter, priorityFilter]);
 
-  const handleStatusUpdate = (taskId: string, newStatus: Task["status"]) => {
-    const updatedTask = DataManager.updateTask(taskId, { status: newStatus });
-    if (updatedTask) {
-      setTasks((prev) =>
-        prev.map((task) => (task.id === taskId ? updatedTask : task))
-      );
+  const handleStatusUpdate = async (
+    taskId: string,
+    newStatus: Task["status"]
+  ) => {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          ...(newStatus === "COMPLETED" && {
+            completedAt: new Date().toISOString(),
+          }),
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setTasks((prev) =>
+          prev.map((task) => (task.id === taskId ? result.task : task))
+        );
+      }
+    } catch (error) {
+      console.error("Failed to update task:", error);
     }
   };
 
-  const getPriorityColor = (priority: Task["priority"]) => {
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "urgent":
+      case "URGENT":
         return "bg-red-100 text-red-800 border-red-200";
-      case "high":
+      case "HIGH":
         return "bg-orange-100 text-orange-800 border-orange-200";
-      case "medium":
+      case "MEDIUM":
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "low":
+      case "LOW":
         return "bg-green-100 text-green-800 border-green-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
 
-  const getStatusColor = (status: Task["status"]) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case "completed":
+      case "COMPLETED":
         return "bg-green-100 text-green-800 border-green-200";
-      case "in-progress":
+      case "IN_PROGRESS":
         return "bg-blue-100 text-blue-800 border-blue-200";
-      case "pending":
+      case "PENDING":
         return "bg-gray-100 text-gray-800 border-gray-200";
-      case "cancelled":
+      case "CANCELLED":
         return "bg-red-100 text-red-800 border-red-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
 
-  const getPriorityIcon = (priority: Task["priority"]) => {
+  const getPriorityIcon = (priority: string) => {
     switch (priority) {
-      case "urgent":
+      case "URGENT":
         return <Zap className="w-3 h-3" />;
-      case "high":
+      case "HIGH":
         return <AlertCircle className="w-3 h-3" />;
       default:
         return null;
     }
   };
 
-  const getStatusIcon = (status: Task["status"]) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
-      case "completed":
+      case "COMPLETED":
         return <CheckCircle2 className="w-4 h-4 text-green-600" />;
-      case "in-progress":
+      case "IN_PROGRESS":
         return <Clock className="w-4 h-4 text-blue-600" />;
       default:
         return <Circle className="w-4 h-4 text-gray-400" />;
@@ -189,7 +246,7 @@ export function TaskManagement() {
                   In Progress
                 </p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {tasks.filter((task) => task.status === "in-progress").length}
+                  {tasks.filter((task) => task.status === "IN_PROGRESS").length}
                 </p>
               </div>
               <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -205,7 +262,7 @@ export function TaskManagement() {
               <div>
                 <p className="text-sm font-medium text-slate-600">Completed</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {tasks.filter((task) => task.status === "completed").length}
+                  {tasks.filter((task) => task.status === "COMPLETED").length}
                 </p>
               </div>
               <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
@@ -225,7 +282,7 @@ export function TaskManagement() {
                     tasks.filter(
                       (task) =>
                         new Date(task.dueDate) < new Date() &&
-                        task.status !== "completed"
+                        task.status !== "COMPLETED"
                     ).length
                   }
                 </p>
@@ -259,10 +316,10 @@ export function TaskManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="in-progress">In Progress</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
+                <SelectItem value="CANCELLED">Cancelled</SelectItem>
               </SelectContent>
             </Select>
             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
@@ -271,10 +328,10 @@ export function TaskManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Priority</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="LOW">Low</SelectItem>
+                <SelectItem value="MEDIUM">Medium</SelectItem>
+                <SelectItem value="HIGH">High</SelectItem>
+                <SelectItem value="URGENT">Urgent</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -328,13 +385,13 @@ function TaskCard({
   onStatusUpdate: (id: string, status: Task["status"]) => void;
 }) {
   const isOverdue =
-    new Date(task.dueDate) < new Date() && task.status !== "completed";
+    new Date(task.dueDate) < new Date() && task.status !== "COMPLETED";
 
-  const getPriorityIcon = (priority: Task["priority"]) => {
+  const getPriorityIcon = (priority: string) => {
     switch (priority) {
-      case "urgent":
+      case "URGENT":
         return <Zap className="w-3 h-3" />;
-      case "high":
+      case "HIGH":
         return <AlertCircle className="w-3 h-3" />;
       default:
         return null;
@@ -354,12 +411,12 @@ function TaskCard({
             <button
               onClick={() => {
                 const newStatus =
-                  task.status === "completed" ? "pending" : "completed";
+                  task.status === "COMPLETED" ? "PENDING" : "COMPLETED";
                 onStatusUpdate(task.id, newStatus);
               }}
               className="mt-1"
             >
-              {task.status === "completed" ? (
+              {task.status === "COMPLETED" ? (
                 <CheckCircle2 className="w-5 h-5 text-green-600" />
               ) : (
                 <Circle className="w-5 h-5 text-slate-400 hover:text-slate-600" />
@@ -371,14 +428,14 @@ function TaskCard({
                 <h3
                   className={cn(
                     "font-medium text-slate-900",
-                    task.status === "completed" && "line-through text-slate-500"
+                    task.status === "COMPLETED" && "line-through text-slate-500"
                   )}
                 >
                   {task.title}
                 </h3>
                 <Badge variant="outline" className="text-xs">
                   {getPriorityIcon(task.priority)}
-                  <span className="ml-1">{task.priority}</span>
+                  <span className="ml-1">{task.priority.toLowerCase()}</span>
                 </Badge>
               </div>
 
@@ -402,7 +459,11 @@ function TaskCard({
                 )}
                 <div className="flex items-center gap-1">
                   <User className="w-3 h-3" />
-                  <span>Assigned by Manager</span>
+                  <span>
+                    {task.createdByEmployee
+                      ? `${task.createdByEmployee.firstName} ${task.createdByEmployee.lastName}`
+                      : "Manager"}
+                  </span>
                 </div>
               </div>
 
@@ -420,7 +481,7 @@ function TaskCard({
 
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
-              {task.status.replace("-", " ")}
+              {task.status.replace("_", " ").toLowerCase()}
             </Badge>
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
               <MoreHorizontal className="w-4 h-4" />
@@ -445,38 +506,51 @@ function CreateTaskDialog({
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    priority: "medium" as Task["priority"],
+    priority: "MEDIUM",
     dueDate: "",
     estimatedHours: "",
     tags: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!employee) return;
 
-    const newTask = DataManager.addTask({
-      title: formData.title,
-      description: formData.description,
-      assignedTo: employee.id,
-      assignedBy: employee.id, // Self-assigned for now
-      priority: formData.priority,
-      status: "pending",
-      dueDate: new Date(formData.dueDate),
-      estimatedHours: formData.estimatedHours
-        ? Number.parseInt(formData.estimatedHours)
-        : undefined,
-      tags: formData.tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-    });
+    try {
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          assignedTo: employee.id,
+          assignedBy: employee.id, // Self-assigned for now
+          priority: formData.priority,
+          dueDate: formData.dueDate,
+          estimatedHours: formData.estimatedHours
+            ? Number.parseFloat(formData.estimatedHours)
+            : undefined,
+          tags: formData.tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+        }),
+      });
 
-    onTaskCreated(newTask);
+      const result = await response.json();
+      if (result.success) {
+        onTaskCreated(result.task);
+      }
+    } catch (error) {
+      console.error("Failed to create task:", error);
+    }
+
     setFormData({
       title: "",
       description: "",
-      priority: "medium",
+      priority: "MEDIUM",
       dueDate: "",
       estimatedHours: "",
       tags: "",
@@ -530,7 +604,7 @@ function CreateTaskDialog({
               <Label htmlFor="priority">Priority</Label>
               <Select
                 value={formData.priority}
-                onValueChange={(value: Task["priority"]) =>
+                onValueChange={(value) =>
                   setFormData((prev) => ({ ...prev, priority: value }))
                 }
               >
@@ -538,10 +612,10 @@ function CreateTaskDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="URGENT">Urgent</SelectItem>
                 </SelectContent>
               </Select>
             </div>

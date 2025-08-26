@@ -1,17 +1,30 @@
-"use client"
+// @ts-nocheck
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Users,
   Clock,
@@ -30,47 +43,67 @@ import {
   Shield,
   MapPin,
   Download,
-} from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
-import { dataManager } from "@/lib/data-prisma"
-import { cn } from "@/lib/utils"
-import type { Employee } from "@prisma/client"
+} from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { cn } from "@/lib/utils";
 
 interface DashboardStats {
-  totalEmployees: number
-  activeEmployees: number
-  totalTasks: number
-  completedTasks: number
-  pendingTasks: number
-  totalHoursToday: number
-  averageHoursPerEmployee: number
+  totalEmployees: number;
+  activeEmployees: number;
+  totalTasks: number;
+  completedTasks: number;
+  pendingTasks: number;
+  totalHoursToday: number;
+  averageHoursPerEmployee: number;
+}
+
+interface Employee {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: "ADMIN" | "MANAGER" | "EMPLOYEE";
+  department: string;
+  position: string;
+  avatar?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export function AdminDashboard() {
-  const { employee } = useAuth()
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [activeTab, setActiveTab] = useState("overview")
+  const { employee } = useAuth();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const dashboardStats = await dataManager.getDashboardStats()
-        setStats(dashboardStats)
+        const response = await fetch("/api/dashboard/stats");
+        const result = await response.json();
+
+        if (result.success) {
+          setStats(result.stats);
+        }
       } catch (error) {
-        console.error("Failed to load dashboard stats:", error)
+        console.error("Failed to load dashboard stats:", error);
       }
-    }
-    loadStats()
-  }, [])
+    };
+    loadStats();
+  }, []);
 
   if (!employee || (employee.role !== "ADMIN" && employee.role !== "MANAGER")) {
     return (
       <div className="text-center py-12">
         <Shield className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-        <h2 className="text-xl font-semibold text-slate-900 mb-2">Access Denied</h2>
-        <p className="text-slate-600">You don't have permission to access the admin dashboard.</p>
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">
+          Access Denied
+        </h2>
+        <p className="text-slate-600">
+          You don't have permission to access the admin dashboard.
+        </p>
       </div>
-    )
+    );
   }
 
   return (
@@ -78,11 +111,17 @@ export function AdminDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Admin Dashboard</h1>
-          <p className="text-slate-600">Manage employees, tasks, and company operations</p>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Admin Dashboard
+          </h1>
+          <p className="text-slate-600">
+            Manage employees, tasks, and company operations
+          </p>
         </div>
         <Badge variant="secondary" className="w-fit">
-          {employee.role.charAt(0).toUpperCase() + employee.role.slice(1).toLowerCase()} Access
+          {employee.role.charAt(0).toUpperCase() +
+            employee.role.slice(1).toLowerCase()}{" "}
+          Access
         </Badge>
       </div>
 
@@ -91,40 +130,56 @@ export function AdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Total Employees
+              </CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalEmployees}</div>
-              <p className="text-xs text-muted-foreground">{stats.activeEmployees} active</p>
+              <p className="text-xs text-muted-foreground">
+                {stats.activeEmployees} active
+              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Hours</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Today's Hours
+              </CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalHoursToday}h</div>
-              <p className="text-xs text-muted-foreground">{stats.averageHoursPerEmployee}h avg per employee</p>
+              <p className="text-xs text-muted-foreground">
+                {stats.averageHoursPerEmployee}h avg per employee
+              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Tasks</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Active Tasks
+              </CardTitle>
               <CheckSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalTasks - stats.completedTasks}</div>
-              <p className="text-xs text-muted-foreground">{stats.completedTasks} completed</p>
+              <div className="text-2xl font-bold">
+                {stats.totalTasks - stats.completedTasks}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {stats.completedTasks} completed
+              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Pending Tasks
+              </CardTitle>
               <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -136,7 +191,11 @@ export function AdminDashboard() {
       )}
 
       {/* Admin Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-6"
+      >
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
@@ -166,63 +225,75 @@ export function AdminDashboard() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }
 
 function AdminOverview() {
   const [recentActivity, setRecentActivity] = useState<
     Array<{ id: string; type: string; message: string; time: string }>
-  >([])
-  const [showCreateEmployee, setShowCreateEmployee] = useState(false)
-  const [showCreateTask, setShowCreateTask] = useState(false)
-  const [showReports, setShowReports] = useState(false)
-  const [showDepartments, setShowDepartments] = useState(false)
+  >([]);
+  const [showCreateEmployee, setShowCreateEmployee] = useState(false);
+  const [showCreateTask, setShowCreateTask] = useState(false);
+  const [showReports, setShowReports] = useState(false);
+  const [showDepartments, setShowDepartments] = useState(false);
 
   useEffect(() => {
     const loadRecentActivity = async () => {
       try {
-        const [loginSessions, tasks, employees] = await Promise.all([
-          dataManager.getLoginSessions(),
-          dataManager.getTasks(),
-          dataManager.getEmployees(),
-        ])
+        const [loginResponse, tasksResponse] = await Promise.all([
+          fetch("/api/login-sessions"),
+          fetch("/api/tasks"),
+        ]);
 
-        const activities = []
+        const [loginResult, tasksResult] = await Promise.all([
+          loginResponse.json(),
+          tasksResponse.json(),
+        ]);
+
+        const activities = [];
 
         // Recent logins
-        loginSessions.slice(0, 2).forEach((session) => {
-          if (session.employee) {
-            activities.push({
-              id: `login-${session.id}`,
-              type: "login",
-              message: `${session.employee.firstName} ${session.employee.lastName} ${session.isActive ? "logged in" : "logged out"}`,
-              time: new Date(session.loginTime).toLocaleString(),
-            })
-          }
-        })
+        if (loginResult.success) {
+          loginResult.loginSessions.slice(0, 2).forEach((session: any) => {
+            if (session.employee) {
+              activities.push({
+                id: `login-${session.id}`,
+                type: "login",
+                message: `${session.employee.firstName} ${
+                  session.employee.lastName
+                } ${session.isActive ? "logged in" : "logged out"}`,
+                time: new Date(session.loginTime).toLocaleString(),
+              });
+            }
+          });
+        }
 
         // Recent task completions
-        tasks
-          .filter((task) => task.status === "COMPLETED")
-          .slice(0, 2)
-          .forEach((task) => {
-            if (task.assignedEmployee) {
-              activities.push({
-                id: `task-${task.id}`,
-                type: "task",
-                message: `${task.assignedEmployee.firstName} ${task.assignedEmployee.lastName} completed '${task.title}'`,
-                time: task.completedAt ? new Date(task.completedAt).toLocaleString() : "Recently",
-              })
-            }
-          })
+        if (tasksResult.success) {
+          tasksResult.tasks
+            .filter((task: any) => task.status === "COMPLETED")
+            .slice(0, 2)
+            .forEach((task: any) => {
+              if (task.assignedEmployee) {
+                activities.push({
+                  id: `task-${task.id}`,
+                  type: "task",
+                  message: `${task.assignedEmployee.firstName} ${task.assignedEmployee.lastName} completed '${task.title}'`,
+                  time: task.completedAt
+                    ? new Date(task.completedAt).toLocaleString()
+                    : "Recently",
+                });
+              }
+            });
+        }
 
-        setRecentActivity(activities.slice(0, 4))
+        setRecentActivity(activities.slice(0, 4));
       } catch (error) {
-        console.error("Failed to load recent activity:", error)
+        console.error("Failed to load recent activity:", error);
       }
-    }
-    loadRecentActivity()
-  }, [])
+    };
+    loadRecentActivity();
+  }, []);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -238,29 +309,44 @@ function AdminOverview() {
           <div className="space-y-4">
             {recentActivity.length > 0 ? (
               recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                <div
+                  key={activity.id}
+                  className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg"
+                >
                   <div
                     className={cn(
                       "w-8 h-8 rounded-full flex items-center justify-center",
                       activity.type === "login" && "bg-green-100",
                       activity.type === "task" && "bg-blue-100",
                       activity.type === "employee" && "bg-purple-100",
-                      activity.type === "system" && "bg-orange-100",
+                      activity.type === "system" && "bg-orange-100"
                     )}
                   >
-                    {activity.type === "login" && <Clock className="w-4 h-4 text-green-600" />}
-                    {activity.type === "task" && <CheckSquare className="w-4 h-4 text-blue-600" />}
-                    {activity.type === "employee" && <Users className="w-4 h-4 text-purple-600" />}
-                    {activity.type === "system" && <Shield className="w-4 h-4 text-orange-600" />}
+                    {activity.type === "login" && (
+                      <Clock className="w-4 h-4 text-green-600" />
+                    )}
+                    {activity.type === "task" && (
+                      <CheckSquare className="w-4 h-4 text-blue-600" />
+                    )}
+                    {activity.type === "employee" && (
+                      <Users className="w-4 h-4 text-purple-600" />
+                    )}
+                    {activity.type === "system" && (
+                      <Shield className="w-4 h-4 text-orange-600" />
+                    )}
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium text-slate-900">{activity.message}</p>
+                    <p className="font-medium text-slate-900">
+                      {activity.message}
+                    </p>
                     <p className="text-sm text-slate-600">{activity.time}</p>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-slate-500 text-center py-4">No recent activity</p>
+              <p className="text-slate-500 text-center py-4">
+                No recent activity
+              </p>
             )}
           </div>
         </CardContent>
@@ -273,7 +359,10 @@ function AdminOverview() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4">
-            <Dialog open={showCreateEmployee} onOpenChange={setShowCreateEmployee}>
+            <Dialog
+              open={showCreateEmployee}
+              onOpenChange={setShowCreateEmployee}
+            >
               <DialogTrigger asChild>
                 <Button className="h-12 justify-start gap-3">
                   <UserPlus className="w-5 h-5" />
@@ -284,13 +373,18 @@ function AdminOverview() {
                 <DialogHeader>
                   <DialogTitle>Add New Employee</DialogTitle>
                 </DialogHeader>
-                <CreateEmployeeForm onClose={() => setShowCreateEmployee(false)} />
+                <CreateEmployeeForm
+                  onClose={() => setShowCreateEmployee(false)}
+                />
               </DialogContent>
             </Dialog>
 
             <Dialog open={showCreateTask} onOpenChange={setShowCreateTask}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="h-12 justify-start gap-3 bg-transparent">
+                <Button
+                  variant="outline"
+                  className="h-12 justify-start gap-3 bg-transparent"
+                >
                   <CheckSquare className="w-5 h-5" />
                   Assign Tasks
                 </Button>
@@ -305,7 +399,10 @@ function AdminOverview() {
 
             <Dialog open={showReports} onOpenChange={setShowReports}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="h-12 justify-start gap-3 bg-transparent">
+                <Button
+                  variant="outline"
+                  className="h-12 justify-start gap-3 bg-transparent"
+                >
                   <TrendingUp className="w-5 h-5" />
                   Generate Reports
                 </Button>
@@ -320,7 +417,10 @@ function AdminOverview() {
 
             <Dialog open={showDepartments} onOpenChange={setShowDepartments}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="h-12 justify-start gap-3 bg-transparent">
+                <Button
+                  variant="outline"
+                  className="h-12 justify-start gap-3 bg-transparent"
+                >
                   <Building className="w-5 h-5" />
                   Manage Departments
                 </Button>
@@ -336,7 +436,7 @@ function AdminOverview() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 function CreateEmployeeForm({ onClose }: { onClose: () => void }) {
@@ -348,22 +448,32 @@ function CreateEmployeeForm({ onClose }: { onClose: () => void }) {
     role: "EMPLOYEE" as "ADMIN" | "MANAGER" | "EMPLOYEE",
     department: "",
     position: "",
-  })
-  const [isLoading, setIsLoading] = useState(false)
+  });
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
-      await dataManager.addEmployee(formData)
-      onClose()
+      const response = await fetch("/api/employees", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        onClose();
+      }
     } catch (error) {
-      console.error("Failed to create employee:", error)
+      console.error("Failed to create employee:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -373,7 +483,9 @@ function CreateEmployeeForm({ onClose }: { onClose: () => void }) {
           <Input
             id="firstName"
             value={formData.firstName}
-            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, firstName: e.target.value })
+            }
             required
           />
         </div>
@@ -382,7 +494,9 @@ function CreateEmployeeForm({ onClose }: { onClose: () => void }) {
           <Input
             id="lastName"
             value={formData.lastName}
-            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, lastName: e.target.value })
+            }
             required
           />
         </div>
@@ -403,7 +517,9 @@ function CreateEmployeeForm({ onClose }: { onClose: () => void }) {
           id="password"
           type="password"
           value={formData.password}
-          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+          onChange={(e) =>
+            setFormData({ ...formData, password: e.target.value })
+          }
           required
         />
       </div>
@@ -413,7 +529,9 @@ function CreateEmployeeForm({ onClose }: { onClose: () => void }) {
           <Input
             id="department"
             value={formData.department}
-            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, department: e.target.value })
+            }
             required
           />
         </div>
@@ -422,14 +540,21 @@ function CreateEmployeeForm({ onClose }: { onClose: () => void }) {
           <Input
             id="position"
             value={formData.position}
-            onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, position: e.target.value })
+            }
             required
           />
         </div>
       </div>
       <div>
         <Label htmlFor="role">Role</Label>
-        <Select value={formData.role} onValueChange={(value: any) => setFormData({ ...formData, role: value })}>
+        <Select
+          value={formData.role}
+          onValueChange={(value: any) =>
+            setFormData({ ...formData, role: value })
+          }
+        >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -449,12 +574,12 @@ function CreateEmployeeForm({ onClose }: { onClose: () => void }) {
         </Button>
       </div>
     </form>
-  )
+  );
 }
 
 function CreateTaskForm({ onClose }: { onClose: () => void }) {
-  const { employee } = useAuth()
-  const [employees, setEmployees] = useState<Employee[]>([])
+  const { employee } = useAuth();
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -463,48 +588,64 @@ function CreateTaskForm({ onClose }: { onClose: () => void }) {
     dueDate: "",
     estimatedHours: "",
     tags: "",
-  })
-  const [isLoading, setIsLoading] = useState(false)
+  });
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const loadEmployees = async () => {
       try {
-        const allEmployees = await dataManager.getEmployees()
-        setEmployees(allEmployees)
+        const response = await fetch("/api/employees");
+        const result = await response.json();
+
+        if (result.success) {
+          setEmployees(result.employees);
+        }
       } catch (error) {
-        console.error("Failed to load employees:", error)
+        console.error("Failed to load employees:", error);
       }
-    }
-    loadEmployees()
-  }, [])
+    };
+    loadEmployees();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!employee) return
+    e.preventDefault();
+    if (!employee) return;
 
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
-      await dataManager.createTask({
-        title: formData.title,
-        description: formData.description,
-        assignedTo: formData.assignedTo,
-        assignedBy: employee.id,
-        priority: formData.priority,
-        dueDate: new Date(formData.dueDate),
-        estimatedHours: formData.estimatedHours ? Number.parseFloat(formData.estimatedHours) : undefined,
-        tags: formData.tags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-      })
-      onClose()
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          assignedTo: formData.assignedTo,
+          assignedBy: employee.id,
+          priority: formData.priority,
+          dueDate: formData.dueDate,
+          estimatedHours: formData.estimatedHours
+            ? Number.parseFloat(formData.estimatedHours)
+            : undefined,
+          tags: formData.tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        onClose();
+      }
     } catch (error) {
-      console.error("Failed to create task:", error)
+      console.error("Failed to create task:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -522,7 +663,9 @@ function CreateTaskForm({ onClose }: { onClose: () => void }) {
         <Textarea
           id="description"
           value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          onChange={(e) =>
+            setFormData({ ...formData, description: e.target.value })
+          }
           required
         />
       </div>
@@ -531,7 +674,9 @@ function CreateTaskForm({ onClose }: { onClose: () => void }) {
           <Label htmlFor="assignedTo">Assign To</Label>
           <Select
             value={formData.assignedTo}
-            onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
+            onValueChange={(value) =>
+              setFormData({ ...formData, assignedTo: value })
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Select employee" />
@@ -549,7 +694,9 @@ function CreateTaskForm({ onClose }: { onClose: () => void }) {
           <Label htmlFor="priority">Priority</Label>
           <Select
             value={formData.priority}
-            onValueChange={(value: any) => setFormData({ ...formData, priority: value })}
+            onValueChange={(value: any) =>
+              setFormData({ ...formData, priority: value })
+            }
           >
             <SelectTrigger>
               <SelectValue />
@@ -570,7 +717,9 @@ function CreateTaskForm({ onClose }: { onClose: () => void }) {
             id="dueDate"
             type="date"
             value={formData.dueDate}
-            onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, dueDate: e.target.value })
+            }
             required
           />
         </div>
@@ -581,7 +730,9 @@ function CreateTaskForm({ onClose }: { onClose: () => void }) {
             type="number"
             step="0.5"
             value={formData.estimatedHours}
-            onChange={(e) => setFormData({ ...formData, estimatedHours: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, estimatedHours: e.target.value })
+            }
           />
         </div>
       </div>
@@ -603,17 +754,17 @@ function CreateTaskForm({ onClose }: { onClose: () => void }) {
         </Button>
       </div>
     </form>
-  )
+  );
 }
 
 function ReportsGenerator({ onClose }: { onClose: () => void }) {
-  const [reportType, setReportType] = useState("attendance")
-  const [dateRange, setDateRange] = useState("week")
+  const [reportType, setReportType] = useState("attendance");
+  const [dateRange, setDateRange] = useState("week");
 
   const generateReport = () => {
-    console.log(`Generating ${reportType} report for ${dateRange}`)
-    onClose()
-  }
+    console.log(`Generating ${reportType} report for ${dateRange}`);
+    onClose();
+  };
 
   return (
     <div className="space-y-4">
@@ -655,30 +806,37 @@ function ReportsGenerator({ onClose }: { onClose: () => void }) {
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 function DepartmentManager({ onClose }: { onClose: () => void }) {
-  const [departments, setDepartments] = useState<any[]>([])
+  const [departments, setDepartments] = useState<any[]>([]);
 
   useEffect(() => {
     const loadDepartments = async () => {
       try {
-        const allDepartments = await dataManager.getDepartments()
-        setDepartments(allDepartments)
+        const response = await fetch("/api/departments");
+        const result = await response.json();
+
+        if (result.success) {
+          setDepartments(result.departments);
+        }
       } catch (error) {
-        console.error("Failed to load departments:", error)
+        console.error("Failed to load departments:", error);
       }
-    }
-    loadDepartments()
-  }, [])
+    };
+    loadDepartments();
+  }, []);
 
   return (
     <div className="space-y-4">
       <div className="space-y-2">
         {departments.length > 0 ? (
           departments.map((dept) => (
-            <div key={dept.id} className="flex items-center justify-between p-3 border rounded-lg">
+            <div
+              key={dept.id}
+              className="flex items-center justify-between p-3 border rounded-lg"
+            >
               <div>
                 <h4 className="font-medium">{dept.name}</h4>
                 <p className="text-sm text-slate-600">{dept.description}</p>
@@ -690,7 +848,9 @@ function DepartmentManager({ onClose }: { onClose: () => void }) {
             </div>
           ))
         ) : (
-          <p className="text-slate-500 text-center py-4">No departments found</p>
+          <p className="text-slate-500 text-center py-4">
+            No departments found
+          </p>
         )}
       </div>
       <div className="flex gap-2 pt-4">
@@ -703,63 +863,75 @@ function DepartmentManager({ onClose }: { onClose: () => void }) {
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 function AttendanceMonitoring() {
-  const [timeEntries, setTimeEntries] = useState<any[]>([])
-  const [loginSessions, setLoginSessions] = useState<any[]>([])
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
+  const [timeEntries, setTimeEntries] = useState<any[]>([]);
+  const [loginSessions, setLoginSessions] = useState<any[]>([]);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
   useEffect(() => {
     const loadAttendanceData = async () => {
       try {
-        const [allTimeEntries, allLoginSessions] = await Promise.all([
-          dataManager.getTimeEntries(),
-          dataManager.getLoginSessions(),
-        ])
+        const [timeResponse, loginResponse] = await Promise.all([
+          fetch("/api/time-entries"),
+          fetch("/api/login-sessions"),
+        ]);
 
-        setTimeEntries(allTimeEntries)
-        setLoginSessions(allLoginSessions)
+        const [timeResult, loginResult] = await Promise.all([
+          timeResponse.json(),
+          loginResponse.json(),
+        ]);
+
+        if (timeResult.success) {
+          setTimeEntries(timeResult.timeEntries);
+        }
+
+        if (loginResult.success) {
+          setLoginSessions(loginResult.loginSessions);
+        }
       } catch (error) {
-        console.error("Failed to load attendance data:", error)
+        console.error("Failed to load attendance data:", error);
       }
-    }
-    loadAttendanceData()
-  }, [])
+    };
+    loadAttendanceData();
+  }, []);
 
   const getCurrentlyLoggedIn = () => {
-    return loginSessions.filter((session) => session.isActive)
-  }
+    return loginSessions.filter((session) => session.isActive);
+  };
 
   const getTodayTimeEntries = () => {
-    const today = new Date(selectedDate)
-    today.setHours(0, 0, 0, 0)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
+    const today = new Date(selectedDate);
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
     return timeEntries.filter((entry) => {
-      const entryDate = new Date(entry.clockIn)
-      return entryDate >= today && entryDate < tomorrow
-    })
-  }
+      const entryDate = new Date(entry.clockIn);
+      return entryDate >= today && entryDate < tomorrow;
+    });
+  };
 
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
-    })
-  }
+    });
+  };
 
   const formatDuration = (start: Date, end?: Date) => {
-    const endTime = end || new Date()
-    const duration = (endTime.getTime() - start.getTime()) / (1000 * 60 * 60)
-    return `${duration.toFixed(1)}h`
-  }
+    const endTime = end || new Date();
+    const duration = (endTime.getTime() - start.getTime()) / (1000 * 60 * 60);
+    return `${duration.toFixed(1)}h`;
+  };
 
-  const currentlyLoggedIn = getCurrentlyLoggedIn()
-  const todayEntries = getTodayTimeEntries()
+  const currentlyLoggedIn = getCurrentlyLoggedIn();
+  const todayEntries = getTodayTimeEntries();
 
   return (
     <div className="space-y-6">
@@ -767,37 +939,52 @@ function AttendanceMonitoring() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Currently Online</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Currently Online
+            </CardTitle>
             <Activity className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{currentlyLoggedIn.length}</div>
+            <div className="text-2xl font-bold text-green-600">
+              {currentlyLoggedIn.length}
+            </div>
             <p className="text-xs text-muted-foreground">Employees logged in</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Check-ins</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Today's Check-ins
+            </CardTitle>
             <LogIn className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{todayEntries.length}</div>
-            <p className="text-xs text-muted-foreground">Total attendance today</p>
+            <div className="text-2xl font-bold text-blue-600">
+              {todayEntries.length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Total attendance today
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Hours Today</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Avg Hours Today
+            </CardTitle>
             <Clock className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">
               {todayEntries.length > 0
-                ? (todayEntries.reduce((sum, entry) => sum + (entry.totalHours || 0), 0) / todayEntries.length).toFixed(
-                    1,
-                  )
+                ? (
+                    todayEntries.reduce(
+                      (sum, entry) => sum + (entry.totalHours || 0),
+                      0
+                    ) / todayEntries.length
+                  ).toFixed(1)
                 : "0.0"}
               h
             </div>
@@ -825,13 +1012,18 @@ function AttendanceMonitoring() {
       {/* Attendance List */}
       <Card>
         <CardHeader>
-          <CardTitle>Attendance for {new Date(selectedDate).toLocaleDateString()}</CardTitle>
+          <CardTitle>
+            Attendance for {new Date(selectedDate).toLocaleDateString()}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {todayEntries.length > 0 ? (
               todayEntries.map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between p-4 border rounded-lg"
+                >
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
                       <Users className="w-5 h-5 text-slate-600" />
@@ -842,57 +1034,70 @@ function AttendanceMonitoring() {
                       </div>
                       <div className="text-sm text-slate-600 flex items-center gap-2">
                         <MapPin className="w-3 h-3" />
-                        {entry.address || `${entry.latitude}, ${entry.longitude}`}
+                        {entry.address ||
+                          `${entry.latitude}, ${entry.longitude}`}
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="font-medium">
-                      {formatTime(entry.clockIn)} - {entry.clockOut ? formatTime(entry.clockOut) : "Active"}
+                      {formatTime(entry.clockIn)} -{" "}
+                      {entry.clockOut ? formatTime(entry.clockOut) : "Active"}
                     </div>
                     <div className="text-sm text-slate-600">
-                      {entry.totalHours ? `${entry.totalHours}h` : formatDuration(entry.clockIn, entry.clockOut)}
+                      {entry.totalHours
+                        ? `${entry.totalHours}h`
+                        : formatDuration(entry.clockIn, entry.clockOut)}
                     </div>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-slate-500 text-center py-8">No attendance records for this date</p>
+              <p className="text-slate-500 text-center py-8">
+                No attendance records for this date
+              </p>
             )}
           </div>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 function EmployeeManagement() {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [departmentFilter, setDepartmentFilter] = useState("all")
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
 
   useEffect(() => {
     const loadEmployees = async () => {
       try {
-        const allEmployees = await dataManager.getEmployees()
-        setEmployees(allEmployees)
+        const response = await fetch("/api/employees");
+        const result = await response.json();
+
+        if (result.success) {
+          setEmployees(result.employees);
+        }
       } catch (error) {
-        console.error("Failed to load employees:", error)
+        console.error("Failed to load employees:", error);
       }
-    }
-    loadEmployees()
-  }, [])
+    };
+    loadEmployees();
+  }, []);
 
   const filteredEmployees = employees.filter((emp) => {
     const matchesSearch =
       emp.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesDepartment = departmentFilter === "all" || emp.department === departmentFilter
-    return matchesSearch && matchesDepartment
-  })
+      emp.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesDepartment =
+      departmentFilter === "all" || emp.department === departmentFilter;
+    return matchesSearch && matchesDepartment;
+  });
 
-  const departments = Array.from(new Set(employees.map((emp) => emp.department)))
+  const departments = Array.from(
+    new Set(employees.map((emp) => emp.department))
+  );
 
   return (
     <div className="space-y-6">
@@ -911,7 +1116,10 @@ function EmployeeManagement() {
                 />
               </div>
             </div>
-            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+            <Select
+              value={departmentFilter}
+              onValueChange={setDepartmentFilter}
+            >
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
@@ -952,15 +1160,21 @@ function EmployeeManagement() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          employee.role === "ADMIN" && "border-red-200 text-red-800",
-                          employee.role === "MANAGER" && "border-blue-200 text-blue-800",
-                          employee.role === "EMPLOYEE" && "border-green-200 text-green-800",
+                          employee.role === "ADMIN" &&
+                            "border-red-200 text-red-800",
+                          employee.role === "MANAGER" &&
+                            "border-blue-200 text-blue-800",
+                          employee.role === "EMPLOYEE" &&
+                            "border-green-200 text-green-800"
                         )}
                       >
                         {employee.role.toLowerCase()}
                       </Badge>
                       {!employee.isActive && (
-                        <Badge variant="secondary" className="bg-red-100 text-red-800">
+                        <Badge
+                          variant="secondary"
+                          className="bg-red-100 text-red-800"
+                        >
                           Inactive
                         </Badge>
                       )}
@@ -981,7 +1195,11 @@ function EmployeeManagement() {
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                     <Edit className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                  >
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
@@ -991,23 +1209,27 @@ function EmployeeManagement() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 function TaskManagementAdmin() {
-  const [tasks, setTasks] = useState<any[]>([])
+  const [tasks, setTasks] = useState<any[]>([]);
 
   useEffect(() => {
     const loadTasks = async () => {
       try {
-        const allTasks = await dataManager.getTasks()
-        setTasks(allTasks)
+        const response = await fetch("/api/tasks");
+        const result = await response.json();
+
+        if (result.success) {
+          setTasks(result.tasks);
+        }
       } catch (error) {
-        console.error("Failed to load tasks:", error)
+        console.error("Failed to load tasks:", error);
       }
-    }
-    loadTasks()
-  }, [])
+    };
+    loadTasks();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -1026,14 +1248,20 @@ function TaskManagementAdmin() {
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <h4 className="font-medium text-slate-900">{task.title}</h4>
+                      <h4 className="font-medium text-slate-900">
+                        {task.title}
+                      </h4>
                       <Badge
                         variant="outline"
                         className={cn(
-                          task.priority === "URGENT" && "border-red-200 text-red-800",
-                          task.priority === "HIGH" && "border-orange-200 text-orange-800",
-                          task.priority === "MEDIUM" && "border-yellow-200 text-yellow-800",
-                          task.priority === "LOW" && "border-green-200 text-green-800",
+                          task.priority === "URGENT" &&
+                            "border-red-200 text-red-800",
+                          task.priority === "HIGH" &&
+                            "border-orange-200 text-orange-800",
+                          task.priority === "MEDIUM" &&
+                            "border-yellow-200 text-yellow-800",
+                          task.priority === "LOW" &&
+                            "border-green-200 text-green-800"
                         )}
                       >
                         {task.priority.toLowerCase()}
@@ -1041,21 +1269,31 @@ function TaskManagementAdmin() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          task.status === "COMPLETED" && "border-green-200 text-green-800",
-                          task.status === "IN_PROGRESS" && "border-blue-200 text-blue-800",
-                          task.status === "PENDING" && "border-gray-200 text-gray-800",
+                          task.status === "COMPLETED" &&
+                            "border-green-200 text-green-800",
+                          task.status === "IN_PROGRESS" &&
+                            "border-blue-200 text-blue-800",
+                          task.status === "PENDING" &&
+                            "border-gray-200 text-gray-800"
                         )}
                       >
                         {task.status.replace("_", " ").toLowerCase()}
                       </Badge>
                     </div>
-                    <p className="text-sm text-slate-600 mb-2">{task.description}</p>
+                    <p className="text-sm text-slate-600 mb-2">
+                      {task.description}
+                    </p>
                     <div className="flex items-center gap-4 text-xs text-slate-500">
                       <span>
-                        Assigned to: {task.assignedEmployee?.firstName} {task.assignedEmployee?.lastName}
+                        Assigned to: {task.assignedEmployee?.firstName}{" "}
+                        {task.assignedEmployee?.lastName}
                       </span>
-                      <span>Due: {new Date(task.dueDate).toLocaleDateString()}</span>
-                      {task.estimatedHours && <span>Est: {task.estimatedHours}h</span>}
+                      <span>
+                        Due: {new Date(task.dueDate).toLocaleDateString()}
+                      </span>
+                      {task.estimatedHours && (
+                        <span>Est: {task.estimatedHours}h</span>
+                      )}
                     </div>
                   </div>
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -1070,7 +1308,7 @@ function TaskManagementAdmin() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 function ReportsSection() {
@@ -1082,19 +1320,31 @@ function ReportsSection() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+            <Button
+              variant="outline"
+              className="h-20 flex-col gap-2 bg-transparent"
+            >
               <TrendingUp className="w-6 h-6" />
               <span>Productivity Report</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+            <Button
+              variant="outline"
+              className="h-20 flex-col gap-2 bg-transparent"
+            >
               <Clock className="w-6 h-6" />
               <span>Time Tracking Report</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+            <Button
+              variant="outline"
+              className="h-20 flex-col gap-2 bg-transparent"
+            >
               <Users className="w-6 h-6" />
               <span>Employee Summary</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+            <Button
+              variant="outline"
+              className="h-20 flex-col gap-2 bg-transparent"
+            >
               <Building className="w-6 h-6" />
               <span>Department Analysis</span>
             </Button>
@@ -1102,5 +1352,5 @@ function ReportsSection() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

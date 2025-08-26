@@ -17,9 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/auth-context";
-import { DataManager } from "@/lib/data";
-import { LocationManager } from "@/lib/location";
-import type { TimeEntry } from "@/lib/types";
 import {
   Play,
   Square,
@@ -34,6 +31,25 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+interface TimeEntry {
+  id: string;
+  employeeId: string;
+  clockIn: string;
+  clockOut?: string;
+  latitude: number;
+  longitude: number;
+  address?: string;
+  notes?: string;
+  totalHours?: number;
+  status: "ACTIVE" | "COMPLETED";
+  createdAt: string;
+  employee?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
 export function TimeTracking() {
   const { employee } = useAuth();
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -46,10 +62,26 @@ export function TimeTracking() {
 
   useEffect(() => {
     if (employee) {
-      const entries = DataManager.getTimeEntriesByEmployee(employee.id);
-      setTimeEntries(entries);
-      const activeEntry = entries.find((entry) => entry.status === "active");
-      setCurrentEntry(activeEntry || null);
+      const loadTimeEntries = async () => {
+        try {
+          const response = await fetch(
+            `/api/time-entries?employeeId=${employee.id}`
+          );
+          const result = await response.json();
+
+          if (result.success) {
+            setTimeEntries(result.timeEntries);
+            const activeEntry = result.timeEntries.find(
+              (entry: TimeEntry) => entry.status === "ACTIVE"
+            );
+            setCurrentEntry(activeEntry || null);
+          }
+        } catch (error) {
+          console.error("Failed to load time entries:", error);
+        }
+      };
+
+      loadTimeEntries();
     }
   }, [employee]);
 
@@ -65,17 +97,49 @@ export function TimeTracking() {
     setIsLoading(true);
 
     try {
-      const location = await LocationManager.getCurrentLocation();
-      const newEntry = DataManager.clockIn(
-        employee.id,
-        location || {
-          latitude: 0,
-          longitude: 0,
-          address: "Location unavailable",
+      const location = await new Promise<{
+        latitude: number;
+        longitude: number;
+        address?: string;
+      } | null>((resolve) => {
+        if (!navigator.geolocation) {
+          resolve(null);
+          return;
         }
-      );
-      setCurrentEntry(newEntry);
-      setTimeEntries((prev) => [newEntry, ...prev]);
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              address: `${position.coords.latitude.toFixed(
+                4
+              )}, ${position.coords.longitude.toFixed(4)}`,
+            });
+          },
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      });
+
+      const response = await fetch("/api/time-entries/clock-in", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          latitude: location?.latitude || 0,
+          longitude: location?.longitude || 0,
+          address: location?.address || "Location unavailable",
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setCurrentEntry(result.timeEntry);
+        setTimeEntries((prev) => [result.timeEntry, ...prev]);
+      }
     } catch (error) {
       console.error("Clock in failed:", error);
     } finally {
@@ -88,15 +152,30 @@ export function TimeTracking() {
     setIsLoading(true);
 
     try {
-      const updatedEntry = DataManager.clockOut(employee.id);
-      if (updatedEntry) {
-        setCurrentEntry(null);
-        setTimeEntries((prev) =>
-          prev.map((entry) =>
-            entry.id === updatedEntry.id ? updatedEntry : entry
-          )
-        );
-      }
+      const clockOut = async () => {
+        const response = await fetch("/api/time-entries/clock-out", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            employeeId: employee.id,
+          }),
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          const updatedEntry = result.timeEntry;
+          setCurrentEntry(null);
+          setTimeEntries((prev) =>
+            prev.map((entry) =>
+              entry.id === updatedEntry.id ? updatedEntry : entry
+            )
+          );
+        }
+      };
+
+      clockOut();
     } catch (error) {
       console.error("Clock out failed:", error);
     } finally {
@@ -106,7 +185,8 @@ export function TimeTracking() {
 
   const getCurrentSessionDuration = () => {
     if (!currentEntry) return "00:00:00";
-    const duration = currentTime.getTime() - currentEntry.clockIn.getTime();
+    const duration =
+      currentTime.getTime() - new Date(currentEntry.clockIn).getTime();
     const hours = Math.floor(duration / (1000 * 60 * 60));
     const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((duration % (1000 * 60)) / 1000);
@@ -140,14 +220,14 @@ export function TimeTracking() {
   const getTotalHours = () => {
     const filtered = getFilteredEntries();
     return filtered
-      .filter((entry) => entry.status === "completed")
+      .filter((entry) => entry.status === "COMPLETED")
       .reduce((sum, entry) => sum + (entry.totalHours || 0), 0);
   };
 
   const getAverageHours = () => {
     const filtered = getFilteredEntries();
     const completedEntries = filtered.filter(
-      (entry) => entry.status === "completed"
+      (entry) => entry.status === "COMPLETED"
     );
     if (completedEntries.length === 0) return 0;
 
@@ -212,15 +292,15 @@ export function TimeTracking() {
                 </h3>
                 <p className="text-slate-600">
                   {currentEntry
-                    ? `Started at ${currentEntry.clockIn.toLocaleTimeString()}`
+                    ? `Started at ${new Date(
+                        currentEntry.clockIn
+                      ).toLocaleTimeString()}`
                     : "Ready to start your work session"}
                 </p>
                 {currentEntry && (
                   <div className="flex items-center gap-2 mt-2 text-sm text-slate-600">
                     <MapPin className="w-4 h-4" />
-                    <span>
-                      {currentEntry.location.address || "Location recorded"}
-                    </span>
+                    <span>{currentEntry.address || "Location recorded"}</span>
                   </div>
                 )}
               </div>
@@ -407,10 +487,10 @@ function TimeEntryCard({ entry }: { entry: TimeEntry }) {
         <div
           className={cn(
             "w-10 h-10 rounded-full flex items-center justify-center",
-            entry.status === "active" ? "bg-green-100" : "bg-slate-100"
+            entry.status === "ACTIVE" ? "bg-green-100" : "bg-slate-100"
           )}
         >
-          {entry.status === "active" ? (
+          {entry.status === "ACTIVE" ? (
             <Clock className="w-5 h-5 text-green-600" />
           ) : (
             <CheckCircle2 className="w-5 h-5 text-slate-600" />
@@ -419,10 +499,12 @@ function TimeEntryCard({ entry }: { entry: TimeEntry }) {
         <div>
           <div className="flex items-center gap-2">
             <span className="font-medium text-slate-900">
-              {entry.clockIn.toLocaleTimeString()} -{" "}
-              {entry.clockOut?.toLocaleTimeString() || "In Progress"}
+              {new Date(entry.clockIn).toLocaleTimeString()} -{" "}
+              {entry.clockOut
+                ? new Date(entry.clockOut).toLocaleTimeString()
+                : "In Progress"}
             </span>
-            {entry.status === "active" && (
+            {entry.status === "ACTIVE" && (
               <Badge
                 variant="secondary"
                 className="bg-green-100 text-green-800"
@@ -433,11 +515,11 @@ function TimeEntryCard({ entry }: { entry: TimeEntry }) {
           </div>
           <div className="flex items-center gap-4 text-sm text-slate-600 mt-1">
             <span>
-              {isToday ? "Today" : entry.clockIn.toLocaleDateString()}
+              {isToday ? "Today" : new Date(entry.clockIn).toLocaleDateString()}
             </span>
             <div className="flex items-center gap-1">
               <MapPin className="w-3 h-3" />
-              <span>{entry.location.address || "Location recorded"}</span>
+              <span>{entry.address || "Location recorded"}</span>
             </div>
             {entry.notes && (
               <div className="flex items-center gap-1">
@@ -488,28 +570,49 @@ function AddTimeEntryDialog({
     const totalHours =
       (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60);
 
-    // Get current location for the entry
-    const location = await LocationManager.getCurrentLocation();
+    try {
+      const response = await fetch("/api/time-entries", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          clockIn: startDateTime.toISOString(),
+          latitude: 0,
+          longitude: 0,
+          address: "Manual entry",
+          notes: formData.notes || undefined,
+        }),
+      });
 
-    const newEntry: TimeEntry = {
-      id: Date.now().toString(),
-      employeeId: employee.id,
-      clockIn: startDateTime,
-      clockOut: endDateTime,
-      location: location || {
-        latitude: 0,
-        longitude: 0,
-        address: "Manual entry",
-      },
-      notes: formData.notes || undefined,
-      totalHours: Math.round(totalHours * 100) / 100,
-      status: "completed",
-      createdAt: new Date(),
-    };
+      const result = await response.json();
+      if (result.success) {
+        // Update the entry to mark as completed with clock out time
+        const updateResponse = await fetch(
+          `/api/time-entries/${result.timeEntry.id}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              clockOut: endDateTime.toISOString(),
+              totalHours: Math.round(totalHours * 100) / 100,
+              status: "COMPLETED",
+            }),
+          }
+        );
 
-    // Add to data manager
-    DataManager.getTimeEntries().push(newEntry);
-    onEntryAdded(newEntry);
+        const updateResult = await updateResponse.json();
+        if (updateResult.success) {
+          onEntryAdded(updateResult.timeEntry);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to add time entry:", error);
+    }
+
     setIsOpen(false);
     setFormData({
       date: new Date().toISOString().split("T")[0],

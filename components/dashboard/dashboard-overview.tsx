@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/auth-context";
-import { dataManager } from "@/lib/data-prisma";
 import {
   Clock,
   CheckSquare,
@@ -30,32 +29,14 @@ export function DashboardOverview() {
       if (!employee) return;
 
       try {
-        const [tasks, timeEntries, activeEntry] = await Promise.all([
-          dataManager.getTasks(employee.id),
-          dataManager.getTimeEntries(employee.id),
-          dataManager.getActiveTimeEntry(employee.id),
-        ]);
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayEntries = timeEntries.filter(
-          (entry) =>
-            new Date(entry.clockIn) >= today && entry.status === "COMPLETED"
+        const response = await fetch(
+          `/api/dashboard/stats?employeeId=${employee.id}`
         );
-        const todayHours = todayEntries.reduce(
-          (sum, entry) => sum + (entry.totalHours || 0),
-          0
-        );
+        const result = await response.json();
 
-        setStats({
-          todayHours: Math.round(todayHours * 100) / 100,
-          activeTasks: tasks.filter(
-            (task) => task.status === "IN_PROGRESS" || task.status === "PENDING"
-          ).length,
-          completedTasks: tasks.filter((task) => task.status === "COMPLETED")
-            .length,
-          isClocked: !!activeEntry,
-        });
+        if (result.success) {
+          setStats(result.stats);
+        }
       } catch (error) {
         console.error("Failed to load dashboard stats:", error);
       }
@@ -70,18 +51,18 @@ export function DashboardOverview() {
     if (stats.isClocked) {
       // Clock out
       try {
-        const activeEntry = await dataManager.getActiveTimeEntry(employee.id);
-        if (activeEntry) {
-          const now = new Date();
-          const clockInTime = new Date(activeEntry.clockIn);
-          const totalHours =
-            (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
+        const response = await fetch("/api/time-entries/clock-out", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            employeeId: employee.id,
+          }),
+        });
 
-          await dataManager.updateTimeEntry(activeEntry.id, {
-            clockOut: now,
-            totalHours: Math.round(totalHours * 100) / 100,
-            status: "COMPLETED",
-          });
+        const result = await response.json();
+        if (result.success) {
           setStats((prev) => ({ ...prev, isClocked: false }));
         }
       } catch (error) {
@@ -115,14 +96,23 @@ export function DashboardOverview() {
           );
         });
 
-        await dataManager.createTimeEntry({
-          employeeId: employee.id,
-          clockIn: new Date(),
-          latitude: location?.latitude || 0,
-          longitude: location?.longitude || 0,
-          address: location?.address || "Location unavailable",
+        const response = await fetch("/api/time-entries/clock-in", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            employeeId: employee.id,
+            latitude: location?.latitude || 0,
+            longitude: location?.longitude || 0,
+            address: location?.address || "Location unavailable",
+          }),
         });
-        setStats((prev) => ({ ...prev, isClocked: true }));
+
+        const result = await response.json();
+        if (result.success) {
+          setStats((prev) => ({ ...prev, isClocked: true }));
+        }
       } catch (error) {
         console.error("Clock in failed:", error);
       }
