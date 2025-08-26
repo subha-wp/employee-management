@@ -1,4 +1,3 @@
-//@ts-nocheck
 "use client";
 
 import type React from "react";
@@ -18,9 +17,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/auth-context";
-import { dataManager } from "@/lib/data-prisma";
+import { DataManager } from "@/lib/data";
 import { LocationManager } from "@/lib/location";
-import type { TimeEntry } from "@prisma/client";
+import type { TimeEntry } from "@/lib/types";
 import {
   Play,
   Square,
@@ -37,7 +36,7 @@ import { cn } from "@/lib/utils";
 
 export function TimeTracking() {
   const { employee } = useAuth();
-  const [timeEntries, setTimeEntries] = useState<any[]>([]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -46,23 +45,12 @@ export function TimeTracking() {
   >("today");
 
   useEffect(() => {
-    const loadTimeEntries = async () => {
-      if (!employee) return;
-
-      try {
-        const [entries, activeEntry] = await Promise.all([
-          dataManager.getTimeEntries(employee.id),
-          dataManager.getActiveTimeEntry(employee.id),
-        ]);
-
-        setTimeEntries(entries);
-        setCurrentEntry(activeEntry || null);
-      } catch (error) {
-        console.error("Failed to load time entries:", error);
-      }
-    };
-
-    loadTimeEntries();
+    if (employee) {
+      const entries = DataManager.getTimeEntriesByEmployee(employee.id);
+      setTimeEntries(entries);
+      const activeEntry = entries.find((entry) => entry.status === "active");
+      setCurrentEntry(activeEntry || null);
+    }
   }, [employee]);
 
   useEffect(() => {
@@ -78,14 +66,14 @@ export function TimeTracking() {
 
     try {
       const location = await LocationManager.getCurrentLocation();
-      const newEntry = await dataManager.createTimeEntry({
-        employeeId: employee.id,
-        clockIn: new Date(),
-        latitude: location?.latitude || 0,
-        longitude: location?.longitude || 0,
-        address: location?.address || "Location unavailable",
-      });
-
+      const newEntry = DataManager.clockIn(
+        employee.id,
+        location || {
+          latitude: 0,
+          longitude: 0,
+          address: "Location unavailable",
+        }
+      );
       setCurrentEntry(newEntry);
       setTimeEntries((prev) => [newEntry, ...prev]);
     } catch (error) {
@@ -100,14 +88,7 @@ export function TimeTracking() {
     setIsLoading(true);
 
     try {
-      const updatedEntry = await dataManager.updateTimeEntry(currentEntry.id, {
-        clockOut: new Date(),
-        totalHours:
-          (new Date().getTime() - new Date(currentEntry.clockIn).getTime()) /
-          (1000 * 60 * 60),
-        status: "COMPLETED",
-      });
-
+      const updatedEntry = DataManager.clockOut(employee.id);
       if (updatedEntry) {
         setCurrentEntry(null);
         setTimeEntries((prev) =>
@@ -159,14 +140,14 @@ export function TimeTracking() {
   const getTotalHours = () => {
     const filtered = getFilteredEntries();
     return filtered
-      .filter((entry) => entry.status === "COMPLETED")
+      .filter((entry) => entry.status === "completed")
       .reduce((sum, entry) => sum + (entry.totalHours || 0), 0);
   };
 
   const getAverageHours = () => {
     const filtered = getFilteredEntries();
     const completedEntries = filtered.filter(
-      (entry) => entry.status === "COMPLETED"
+      (entry) => entry.status === "completed"
     );
     if (completedEntries.length === 0) return 0;
 
@@ -410,7 +391,7 @@ export function TimeTracking() {
   );
 }
 
-function TimeEntryCard({ entry }: { entry: any }) {
+function TimeEntryCard({ entry }: { entry: TimeEntry }) {
   const formatDuration = (hours: number) => {
     const h = Math.floor(hours);
     const m = Math.round((hours - h) * 60);
@@ -426,10 +407,10 @@ function TimeEntryCard({ entry }: { entry: any }) {
         <div
           className={cn(
             "w-10 h-10 rounded-full flex items-center justify-center",
-            entry.status === "ACTIVE" ? "bg-green-100" : "bg-slate-100"
+            entry.status === "active" ? "bg-green-100" : "bg-slate-100"
           )}
         >
-          {entry.status === "ACTIVE" ? (
+          {entry.status === "active" ? (
             <Clock className="w-5 h-5 text-green-600" />
           ) : (
             <CheckCircle2 className="w-5 h-5 text-slate-600" />
@@ -441,7 +422,7 @@ function TimeEntryCard({ entry }: { entry: any }) {
               {entry.clockIn.toLocaleTimeString()} -{" "}
               {entry.clockOut?.toLocaleTimeString() || "In Progress"}
             </span>
-            {entry.status === "ACTIVE" && (
+            {entry.status === "active" && (
               <Badge
                 variant="secondary"
                 className="bg-green-100 text-green-800"
@@ -487,7 +468,7 @@ function TimeEntryCard({ entry }: { entry: any }) {
 function AddTimeEntryDialog({
   onEntryAdded,
 }: {
-  onEntryAdded: (entry: any) => void;
+  onEntryAdded: (entry: TimeEntry) => void;
 }) {
   const { employee } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -510,17 +491,24 @@ function AddTimeEntryDialog({
     // Get current location for the entry
     const location = await LocationManager.getCurrentLocation();
 
-    const newEntry = await dataManager.createTimeEntry({
+    const newEntry: TimeEntry = {
+      id: Date.now().toString(),
       employeeId: employee.id,
       clockIn: startDateTime,
       clockOut: endDateTime,
-      latitude: location?.latitude || 0,
-      longitude: location?.longitude || 0,
-      address: location?.address || "Manual entry",
+      location: location || {
+        latitude: 0,
+        longitude: 0,
+        address: "Manual entry",
+      },
       notes: formData.notes || undefined,
       totalHours: Math.round(totalHours * 100) / 100,
-    });
+      status: "completed",
+      createdAt: new Date(),
+    };
 
+    // Add to data manager
+    DataManager.getTimeEntries().push(newEntry);
     onEntryAdded(newEntry);
     setIsOpen(false);
     setFormData({
