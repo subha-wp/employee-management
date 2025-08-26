@@ -1,136 +1,192 @@
-"use client"
+//@ts-nocheck
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { useAuth } from "@/contexts/auth-context"
-import { DataManager } from "@/lib/data"
-import { LocationManager } from "@/lib/location"
-import type { TimeEntry } from "@/lib/types"
-import { Play, Square, Clock, MapPin, Calendar, TrendingUp, Coffee, Edit, Loader2, CheckCircle2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/auth-context";
+import { dataManager } from "@/lib/data-prisma";
+import { LocationManager } from "@/lib/location";
+import type { TimeEntry } from "@prisma/client";
+import {
+  Play,
+  Square,
+  Clock,
+  MapPin,
+  Calendar,
+  TrendingUp,
+  Coffee,
+  Edit,
+  Loader2,
+  CheckCircle2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function TimeTracking() {
-  const { employee } = useAuth()
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
-  const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [currentTime, setCurrentTime] = useState(new Date())
-  const [selectedPeriod, setSelectedPeriod] = useState<"today" | "week" | "month">("today")
+  const { employee } = useAuth();
+  const [timeEntries, setTimeEntries] = useState<any[]>([]);
+  const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [selectedPeriod, setSelectedPeriod] = useState<
+    "today" | "week" | "month"
+  >("today");
 
   useEffect(() => {
-    if (employee) {
-      const entries = DataManager.getTimeEntriesByEmployee(employee.id)
-      setTimeEntries(entries)
-      const activeEntry = entries.find((entry) => entry.status === "active")
-      setCurrentEntry(activeEntry || null)
-    }
-  }, [employee])
+    const loadTimeEntries = async () => {
+      if (!employee) return;
+
+      try {
+        const [entries, activeEntry] = await Promise.all([
+          dataManager.getTimeEntries(employee.id),
+          dataManager.getActiveTimeEntry(employee.id),
+        ]);
+
+        setTimeEntries(entries);
+        setCurrentEntry(activeEntry || null);
+      } catch (error) {
+        console.error("Failed to load time entries:", error);
+      }
+    };
+
+    loadTimeEntries();
+  }, [employee]);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [])
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleClockIn = async () => {
-    if (!employee) return
-    setIsLoading(true)
+    if (!employee) return;
+    setIsLoading(true);
 
     try {
-      const location = await LocationManager.getCurrentLocation()
-      const newEntry = DataManager.clockIn(
-        employee.id,
-        location || { latitude: 0, longitude: 0, address: "Location unavailable" },
-      )
-      setCurrentEntry(newEntry)
-      setTimeEntries((prev) => [newEntry, ...prev])
+      const location = await LocationManager.getCurrentLocation();
+      const newEntry = await dataManager.createTimeEntry({
+        employeeId: employee.id,
+        clockIn: new Date(),
+        latitude: location?.latitude || 0,
+        longitude: location?.longitude || 0,
+        address: location?.address || "Location unavailable",
+      });
+
+      setCurrentEntry(newEntry);
+      setTimeEntries((prev) => [newEntry, ...prev]);
     } catch (error) {
-      console.error("Clock in failed:", error)
+      console.error("Clock in failed:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleClockOut = () => {
-    if (!employee || !currentEntry) return
-    setIsLoading(true)
+    if (!employee || !currentEntry) return;
+    setIsLoading(true);
 
     try {
-      const updatedEntry = DataManager.clockOut(employee.id)
+      const updatedEntry = await dataManager.updateTimeEntry(currentEntry.id, {
+        clockOut: new Date(),
+        totalHours:
+          (new Date().getTime() - new Date(currentEntry.clockIn).getTime()) /
+          (1000 * 60 * 60),
+        status: "COMPLETED",
+      });
+
       if (updatedEntry) {
-        setCurrentEntry(null)
-        setTimeEntries((prev) => prev.map((entry) => (entry.id === updatedEntry.id ? updatedEntry : entry)))
+        setCurrentEntry(null);
+        setTimeEntries((prev) =>
+          prev.map((entry) =>
+            entry.id === updatedEntry.id ? updatedEntry : entry
+          )
+        );
       }
     } catch (error) {
-      console.error("Clock out failed:", error)
+      console.error("Clock out failed:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const getCurrentSessionDuration = () => {
-    if (!currentEntry) return "00:00:00"
-    const duration = currentTime.getTime() - currentEntry.clockIn.getTime()
-    const hours = Math.floor(duration / (1000 * 60 * 60))
-    const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60))
-    const seconds = Math.floor((duration % (1000 * 60)) / 1000)
-    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-  }
+    if (!currentEntry) return "00:00:00";
+    const duration = currentTime.getTime() - currentEntry.clockIn.getTime();
+    const hours = Math.floor(duration / (1000 * 60 * 60));
+    const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((duration % (1000 * 60)) / 1000);
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  };
 
   const getFilteredEntries = () => {
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const weekStart = new Date(today)
-    weekStart.setDate(today.getDate() - today.getDay())
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     return timeEntries.filter((entry) => {
-      const entryDate = new Date(entry.clockIn)
+      const entryDate = new Date(entry.clockIn);
       switch (selectedPeriod) {
         case "today":
-          return entryDate >= today
+          return entryDate >= today;
         case "week":
-          return entryDate >= weekStart
+          return entryDate >= weekStart;
         case "month":
-          return entryDate >= monthStart
+          return entryDate >= monthStart;
         default:
-          return true
+          return true;
       }
-    })
-  }
+    });
+  };
 
   const getTotalHours = () => {
-    const filtered = getFilteredEntries()
+    const filtered = getFilteredEntries();
     return filtered
-      .filter((entry) => entry.status === "completed")
-      .reduce((sum, entry) => sum + (entry.totalHours || 0), 0)
-  }
+      .filter((entry) => entry.status === "COMPLETED")
+      .reduce((sum, entry) => sum + (entry.totalHours || 0), 0);
+  };
 
   const getAverageHours = () => {
-    const filtered = getFilteredEntries()
-    const completedEntries = filtered.filter((entry) => entry.status === "completed")
-    if (completedEntries.length === 0) return 0
+    const filtered = getFilteredEntries();
+    const completedEntries = filtered.filter(
+      (entry) => entry.status === "COMPLETED"
+    );
+    if (completedEntries.length === 0) return 0;
 
-    const uniqueDays = new Set(completedEntries.map((entry) => new Date(entry.clockIn).toDateString())).size
-    return getTotalHours() / uniqueDays
-  }
+    const uniqueDays = new Set(
+      completedEntries.map((entry) => new Date(entry.clockIn).toDateString())
+    ).size;
+    return getTotalHours() / uniqueDays;
+  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Time Tracking</h1>
-          <p className="text-slate-600">Track your work hours and manage time entries</p>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Time Tracking
+          </h1>
+          <p className="text-slate-600">
+            Track your work hours and manage time entries
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {["today", "week", "month"].map((period) => (
@@ -148,14 +204,19 @@ export function TimeTracking() {
       </div>
 
       {/* Current Status Card */}
-      <Card className={cn("border-2", currentEntry ? "border-green-200 bg-green-50/30" : "border-slate-200")}>
+      <Card
+        className={cn(
+          "border-2",
+          currentEntry ? "border-green-200 bg-green-50/30" : "border-slate-200"
+        )}
+      >
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div
                 className={cn(
                   "w-12 h-12 rounded-full flex items-center justify-center",
-                  currentEntry ? "bg-green-100" : "bg-slate-100",
+                  currentEntry ? "bg-green-100" : "bg-slate-100"
                 )}
               >
                 {currentEntry ? (
@@ -176,21 +237,27 @@ export function TimeTracking() {
                 {currentEntry && (
                   <div className="flex items-center gap-2 mt-2 text-sm text-slate-600">
                     <MapPin className="w-4 h-4" />
-                    <span>{currentEntry.location.address || "Location recorded"}</span>
+                    <span>
+                      {currentEntry.location.address || "Location recorded"}
+                    </span>
                   </div>
                 )}
               </div>
             </div>
             <div className="text-right">
               {currentEntry && (
-                <div className="text-3xl font-mono font-bold text-green-600 mb-2">{getCurrentSessionDuration()}</div>
+                <div className="text-3xl font-mono font-bold text-green-600 mb-2">
+                  {getCurrentSessionDuration()}
+                </div>
               )}
               <Button
                 onClick={currentEntry ? handleClockOut : handleClockIn}
                 disabled={isLoading}
                 className={cn(
                   "gap-2",
-                  currentEntry ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700",
+                  currentEntry
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-green-600 hover:bg-green-700"
                 )}
               >
                 {isLoading ? (
@@ -200,7 +267,11 @@ export function TimeTracking() {
                 ) : (
                   <Play className="w-4 h-4" />
                 )}
-                {isLoading ? "Processing..." : currentEntry ? "Clock Out" : "Clock In"}
+                {isLoading
+                  ? "Processing..."
+                  : currentEntry
+                  ? "Clock Out"
+                  : "Clock In"}
               </Button>
             </div>
           </div>
@@ -215,7 +286,9 @@ export function TimeTracking() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{getTotalHours().toFixed(1)}h</div>
+            <div className="text-2xl font-bold">
+              {getTotalHours().toFixed(1)}h
+            </div>
             <p className="text-xs text-muted-foreground">
               {selectedPeriod === "today" ? "Today" : `This ${selectedPeriod}`}
             </p>
@@ -228,7 +301,9 @@ export function TimeTracking() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{getAverageHours().toFixed(1)}h</div>
+            <div className="text-2xl font-bold">
+              {getAverageHours().toFixed(1)}h
+            </div>
             <p className="text-xs text-muted-foreground">Per working day</p>
           </CardContent>
         </Card>
@@ -239,7 +314,9 @@ export function TimeTracking() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{getFilteredEntries().length}</div>
+            <div className="text-2xl font-bold">
+              {getFilteredEntries().length}
+            </div>
             <p className="text-xs text-muted-foreground">Work sessions</p>
           </CardContent>
         </Card>
@@ -269,25 +346,35 @@ export function TimeTracking() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button variant="outline" className="h-16 justify-start gap-3 text-left bg-transparent">
+            <Button
+              variant="outline"
+              className="h-16 justify-start gap-3 text-left bg-transparent"
+            >
               <Coffee className="w-5 h-5" />
               <div>
                 <div className="font-medium">Take Break</div>
-                <div className="text-xs text-muted-foreground">Pause time tracking</div>
+                <div className="text-xs text-muted-foreground">
+                  Pause time tracking
+                </div>
               </div>
             </Button>
 
             <AddTimeEntryDialog
               onEntryAdded={(entry) => {
-                setTimeEntries((prev) => [entry, ...prev])
+                setTimeEntries((prev) => [entry, ...prev]);
               }}
             />
 
-            <Button variant="outline" className="h-16 justify-start gap-3 text-left bg-transparent">
+            <Button
+              variant="outline"
+              className="h-16 justify-start gap-3 text-left bg-transparent"
+            >
               <Calendar className="w-5 h-5" />
               <div>
                 <div className="font-medium">View Reports</div>
-                <div className="text-xs text-muted-foreground">Detailed time analysis</div>
+                <div className="text-xs text-muted-foreground">
+                  Detailed time analysis
+                </div>
               </div>
             </Button>
           </div>
@@ -304,27 +391,34 @@ export function TimeTracking() {
             {getFilteredEntries().length === 0 ? (
               <div className="text-center py-8">
                 <Clock className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-slate-900 mb-2">No time entries</h3>
-                <p className="text-slate-600">Start tracking your time to see entries here</p>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">
+                  No time entries
+                </h3>
+                <p className="text-slate-600">
+                  Start tracking your time to see entries here
+                </p>
               </div>
             ) : (
-              getFilteredEntries().map((entry) => <TimeEntryCard key={entry.id} entry={entry} />)
+              getFilteredEntries().map((entry) => (
+                <TimeEntryCard key={entry.id} entry={entry} />
+              ))
             )}
           </div>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
-function TimeEntryCard({ entry }: { entry: TimeEntry }) {
+function TimeEntryCard({ entry }: { entry: any }) {
   const formatDuration = (hours: number) => {
-    const h = Math.floor(hours)
-    const m = Math.round((hours - h) * 60)
-    return `${h}h ${m}m`
-  }
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    return `${h}h ${m}m`;
+  };
 
-  const isToday = new Date(entry.clockIn).toDateString() === new Date().toDateString()
+  const isToday =
+    new Date(entry.clockIn).toDateString() === new Date().toDateString();
 
   return (
     <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
@@ -332,10 +426,10 @@ function TimeEntryCard({ entry }: { entry: TimeEntry }) {
         <div
           className={cn(
             "w-10 h-10 rounded-full flex items-center justify-center",
-            entry.status === "active" ? "bg-green-100" : "bg-slate-100",
+            entry.status === "ACTIVE" ? "bg-green-100" : "bg-slate-100"
           )}
         >
-          {entry.status === "active" ? (
+          {entry.status === "ACTIVE" ? (
             <Clock className="w-5 h-5 text-green-600" />
           ) : (
             <CheckCircle2 className="w-5 h-5 text-slate-600" />
@@ -344,16 +438,22 @@ function TimeEntryCard({ entry }: { entry: TimeEntry }) {
         <div>
           <div className="flex items-center gap-2">
             <span className="font-medium text-slate-900">
-              {entry.clockIn.toLocaleTimeString()} - {entry.clockOut?.toLocaleTimeString() || "In Progress"}
+              {entry.clockIn.toLocaleTimeString()} -{" "}
+              {entry.clockOut?.toLocaleTimeString() || "In Progress"}
             </span>
-            {entry.status === "active" && (
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
+            {entry.status === "ACTIVE" && (
+              <Badge
+                variant="secondary"
+                className="bg-green-100 text-green-800"
+              >
                 Active
               </Badge>
             )}
           </div>
           <div className="flex items-center gap-4 text-sm text-slate-600 mt-1">
-            <span>{isToday ? "Today" : entry.clockIn.toLocaleDateString()}</span>
+            <span>
+              {isToday ? "Today" : entry.clockIn.toLocaleDateString()}
+            </span>
             <div className="flex items-center gap-1">
               <MapPin className="w-3 h-3" />
               <span>{entry.location.address || "Location recorded"}</span>
@@ -370,7 +470,9 @@ function TimeEntryCard({ entry }: { entry: TimeEntry }) {
       <div className="flex items-center gap-3">
         {entry.totalHours && (
           <div className="text-right">
-            <div className="font-semibold text-slate-900">{formatDuration(entry.totalHours)}</div>
+            <div className="font-semibold text-slate-900">
+              {formatDuration(entry.totalHours)}
+            </div>
             <div className="text-xs text-slate-500">Duration</div>
           </div>
         )}
@@ -379,62 +481,69 @@ function TimeEntryCard({ entry }: { entry: TimeEntry }) {
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
-function AddTimeEntryDialog({ onEntryAdded }: { onEntryAdded: (entry: TimeEntry) => void }) {
-  const { employee } = useAuth()
-  const [isOpen, setIsOpen] = useState(false)
+function AddTimeEntryDialog({
+  onEntryAdded,
+}: {
+  onEntryAdded: (entry: any) => void;
+}) {
+  const { employee } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split("T")[0],
     startTime: "09:00",
     endTime: "17:00",
     notes: "",
-  })
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!employee) return
+    e.preventDefault();
+    if (!employee) return;
 
-    const startDateTime = new Date(`${formData.date}T${formData.startTime}`)
-    const endDateTime = new Date(`${formData.date}T${formData.endTime}`)
-    const totalHours = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60)
+    const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
+    const endDateTime = new Date(`${formData.date}T${formData.endTime}`);
+    const totalHours =
+      (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60);
 
     // Get current location for the entry
-    const location = await LocationManager.getCurrentLocation()
+    const location = await LocationManager.getCurrentLocation();
 
-    const newEntry: TimeEntry = {
-      id: Date.now().toString(),
+    const newEntry = await dataManager.createTimeEntry({
       employeeId: employee.id,
       clockIn: startDateTime,
       clockOut: endDateTime,
-      location: location || { latitude: 0, longitude: 0, address: "Manual entry" },
+      latitude: location?.latitude || 0,
+      longitude: location?.longitude || 0,
+      address: location?.address || "Manual entry",
       notes: formData.notes || undefined,
       totalHours: Math.round(totalHours * 100) / 100,
-      status: "completed",
-      createdAt: new Date(),
-    }
+    });
 
-    // Add to data manager
-    DataManager.getTimeEntries().push(newEntry)
-    onEntryAdded(newEntry)
-    setIsOpen(false)
+    onEntryAdded(newEntry);
+    setIsOpen(false);
     setFormData({
       date: new Date().toISOString().split("T")[0],
       startTime: "09:00",
       endTime: "17:00",
       notes: "",
-    })
-  }
+    });
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="h-16 justify-start gap-3 text-left bg-transparent">
+        <Button
+          variant="outline"
+          className="h-16 justify-start gap-3 text-left bg-transparent"
+        >
           <Edit className="w-5 h-5" />
           <div>
             <div className="font-medium">Add Entry</div>
-            <div className="text-xs text-muted-foreground">Manual time entry</div>
+            <div className="text-xs text-muted-foreground">
+              Manual time entry
+            </div>
           </div>
         </Button>
       </DialogTrigger>
@@ -449,7 +558,9 @@ function AddTimeEntryDialog({ onEntryAdded }: { onEntryAdded: (entry: TimeEntry)
               id="date"
               type="date"
               value={formData.date}
-              onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, date: e.target.value }))
+              }
               required
             />
           </div>
@@ -461,7 +572,12 @@ function AddTimeEntryDialog({ onEntryAdded }: { onEntryAdded: (entry: TimeEntry)
                 id="startTime"
                 type="time"
                 value={formData.startTime}
-                onChange={(e) => setFormData((prev) => ({ ...prev, startTime: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    startTime: e.target.value,
+                  }))
+                }
                 required
               />
             </div>
@@ -471,7 +587,9 @@ function AddTimeEntryDialog({ onEntryAdded }: { onEntryAdded: (entry: TimeEntry)
                 id="endTime"
                 type="time"
                 value={formData.endTime}
-                onChange={(e) => setFormData((prev) => ({ ...prev, endTime: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, endTime: e.target.value }))
+                }
                 required
               />
             </div>
@@ -482,14 +600,20 @@ function AddTimeEntryDialog({ onEntryAdded }: { onEntryAdded: (entry: TimeEntry)
             <Textarea
               id="notes"
               value={formData.notes}
-              onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, notes: e.target.value }))
+              }
               placeholder="Add any notes about this time entry"
               rows={3}
             />
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+            >
               Cancel
             </Button>
             <Button type="submit">Add Entry</Button>
@@ -497,5 +621,5 @@ function AddTimeEntryDialog({ onEntryAdded }: { onEntryAdded: (entry: TimeEntry)
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

@@ -1,80 +1,133 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { useAuth } from "@/contexts/auth-context"
-import { DataManager } from "@/lib/data"
-import { Clock, CheckSquare, TrendingUp, MapPin, Calendar, Play, Square } from "lucide-react"
-import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/auth-context";
+import { dataManager } from "@/lib/data-prisma";
+import {
+  Clock,
+  CheckSquare,
+  TrendingUp,
+  MapPin,
+  Calendar,
+  Play,
+  Square,
+} from "lucide-react";
+import { useState, useEffect } from "react";
 
 export function DashboardOverview() {
-  const { employee } = useAuth()
+  const { employee } = useAuth();
   const [stats, setStats] = useState({
     todayHours: 0,
     activeTasks: 0,
     completedTasks: 0,
     isClocked: false,
-  })
+  });
 
   useEffect(() => {
-    if (employee) {
-      const tasks = DataManager.getTasksByEmployee(employee.id)
-      const timeEntries = DataManager.getTimeEntriesByEmployee(employee.id)
-      const activeEntry = timeEntries.find((entry) => entry.status === "active")
+    const loadStats = async () => {
+      if (!employee) return;
 
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const todayEntries = timeEntries.filter((entry) => entry.clockIn >= today && entry.status === "completed")
-      const todayHours = todayEntries.reduce((sum, entry) => sum + (entry.totalHours || 0), 0)
+      try {
+        const [tasks, timeEntries, activeEntry] = await Promise.all([
+          dataManager.getTasks(employee.id),
+          dataManager.getTimeEntries(employee.id),
+          dataManager.getActiveTimeEntry(employee.id),
+        ]);
 
-      setStats({
-        todayHours: Math.round(todayHours * 100) / 100,
-        activeTasks: tasks.filter((task) => task.status === "in-progress" || task.status === "pending").length,
-        completedTasks: tasks.filter((task) => task.status === "completed").length,
-        isClocked: !!activeEntry,
-      })
-    }
-  }, [employee])
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayEntries = timeEntries.filter(
+          (entry) =>
+            new Date(entry.clockIn) >= today && entry.status === "COMPLETED"
+        );
+        const todayHours = todayEntries.reduce(
+          (sum, entry) => sum + (entry.totalHours || 0),
+          0
+        );
+
+        setStats({
+          todayHours: Math.round(todayHours * 100) / 100,
+          activeTasks: tasks.filter(
+            (task) => task.status === "IN_PROGRESS" || task.status === "PENDING"
+          ).length,
+          completedTasks: tasks.filter((task) => task.status === "COMPLETED")
+            .length,
+          isClocked: !!activeEntry,
+        });
+      } catch (error) {
+        console.error("Failed to load dashboard stats:", error);
+      }
+    };
+
+    loadStats();
+  }, [employee]);
 
   const handleClockAction = async () => {
-    if (!employee) return
+    if (!employee) return;
 
     if (stats.isClocked) {
       // Clock out
-      DataManager.clockOut(employee.id)
-      setStats((prev) => ({ ...prev, isClocked: false }))
+      try {
+        const activeEntry = await dataManager.getActiveTimeEntry(employee.id);
+        if (activeEntry) {
+          const now = new Date();
+          const clockInTime = new Date(activeEntry.clockIn);
+          const totalHours =
+            (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
+
+          await dataManager.updateTimeEntry(activeEntry.id, {
+            clockOut: now,
+            totalHours: Math.round(totalHours * 100) / 100,
+            status: "COMPLETED",
+          });
+          setStats((prev) => ({ ...prev, isClocked: false }));
+        }
+      } catch (error) {
+        console.error("Clock out failed:", error);
+      }
     } else {
       // Clock in - get location first
       try {
-        const location = await new Promise<{ latitude: number; longitude: number; address?: string } | null>(
-          (resolve) => {
-            if (!navigator.geolocation) {
-              resolve(null)
-              return
-            }
+        const location = await new Promise<{
+          latitude: number;
+          longitude: number;
+          address?: string;
+        } | null>((resolve) => {
+          if (!navigator.geolocation) {
+            resolve(null);
+            return;
+          }
 
-            navigator.geolocation.getCurrentPosition(
-              (position) => {
-                resolve({
-                  latitude: position.coords.latitude,
-                  longitude: position.coords.longitude,
-                  address: `${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`,
-                })
-              },
-              () => resolve(null),
-              { enableHighAccuracy: true, timeout: 5000 },
-            )
-          },
-        )
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              resolve({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                address: `${position.coords.latitude.toFixed(
+                  4
+                )}, ${position.coords.longitude.toFixed(4)}`,
+              });
+            },
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 5000 }
+          );
+        });
 
-        DataManager.clockIn(employee.id, location || { latitude: 0, longitude: 0, address: "Location unavailable" })
-        setStats((prev) => ({ ...prev, isClocked: true }))
+        await dataManager.createTimeEntry({
+          employeeId: employee.id,
+          clockIn: new Date(),
+          latitude: location?.latitude || 0,
+          longitude: location?.longitude || 0,
+          address: location?.address || "Location unavailable",
+        });
+        setStats((prev) => ({ ...prev, isClocked: true }));
       } catch (error) {
-        console.error("Clock in failed:", error)
+        console.error("Clock in failed:", error);
       }
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
@@ -83,7 +136,9 @@ export function DashboardOverview() {
         <h1 className="text-xl md:text-2xl font-semibold text-slate-900 mb-2">
           Good morning, {employee?.firstName}! 👋
         </h1>
-        <p className="text-sm md:text-base text-slate-600">Ready to make today productive? Here's your overview.</p>
+        <p className="text-sm md:text-base text-slate-600">
+          Ready to make today productive? Here's your overview.
+        </p>
       </div>
 
       {/* Stats Cards */}
@@ -97,7 +152,10 @@ export function DashboardOverview() {
             <div className="text-2xl font-bold">{stats.todayHours}</div>
             <p className="text-xs text-muted-foreground">
               {stats.isClocked ? (
-                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                <Badge
+                  variant="secondary"
+                  className="bg-green-100 text-green-800"
+                >
                   Currently clocked in
                 </Badge>
               ) : (
@@ -114,7 +172,9 @@ export function DashboardOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeTasks}</div>
-            <p className="text-xs text-muted-foreground">{stats.completedTasks} completed this month</p>
+            <p className="text-xs text-muted-foreground">
+              {stats.completedTasks} completed this month
+            </p>
           </CardContent>
         </Card>
 
@@ -125,7 +185,9 @@ export function DashboardOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{employee?.department}</div>
-            <p className="text-xs text-muted-foreground">{employee?.position}</p>
+            <p className="text-xs text-muted-foreground">
+              {employee?.position}
+            </p>
           </CardContent>
         </Card>
 
@@ -152,23 +214,40 @@ export function DashboardOverview() {
               onClick={handleClockAction}
               className={cn(
                 "h-14 md:h-16 justify-start gap-3 text-left",
-                stats.isClocked ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700",
+                stats.isClocked
+                  ? "bg-red-600 hover:bg-red-700"
+                  : "bg-green-600 hover:bg-green-700"
               )}
             >
-              {stats.isClocked ? <Square className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+              {stats.isClocked ? (
+                <Square className="w-5 h-5" />
+              ) : (
+                <Play className="w-5 h-5" />
+              )}
               <div>
-                <div className="font-medium text-sm md:text-base">{stats.isClocked ? "Clock Out" : "Clock In"}</div>
+                <div className="font-medium text-sm md:text-base">
+                  {stats.isClocked ? "Clock Out" : "Clock In"}
+                </div>
                 <div className="text-xs opacity-90">
-                  {stats.isClocked ? "End your work session" : "Start tracking time"}
+                  {stats.isClocked
+                    ? "End your work session"
+                    : "Start tracking time"}
                 </div>
               </div>
             </Button>
 
-            <Button variant="outline" className="h-14 md:h-16 justify-start gap-3 text-left bg-transparent">
+            <Button
+              variant="outline"
+              className="h-14 md:h-16 justify-start gap-3 text-left bg-transparent"
+            >
               <CheckSquare className="w-5 h-5" />
               <div>
-                <div className="font-medium text-sm md:text-base">View Tasks</div>
-                <div className="text-xs text-muted-foreground">{stats.activeTasks} active tasks</div>
+                <div className="font-medium text-sm md:text-base">
+                  View Tasks
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {stats.activeTasks} active tasks
+                </div>
               </div>
             </Button>
 
@@ -179,7 +258,9 @@ export function DashboardOverview() {
               <MapPin className="w-5 h-5" />
               <div>
                 <div className="font-medium text-sm md:text-base">Location</div>
-                <div className="text-xs text-muted-foreground">Update work location</div>
+                <div className="text-xs text-muted-foreground">
+                  Update work location
+                </div>
               </div>
             </Button>
           </div>
@@ -198,8 +279,12 @@ export function DashboardOverview() {
                 <Clock className="w-4 h-4 text-green-600" />
               </div>
               <div className="flex-1">
-                <p className="font-medium text-slate-900">Clocked in at 9:00 AM</p>
-                <p className="text-sm text-slate-600">Location: Office - Main Building</p>
+                <p className="font-medium text-slate-900">
+                  Clocked in at 9:00 AM
+                </p>
+                <p className="text-sm text-slate-600">
+                  Location: Office - Main Building
+                </p>
               </div>
               <span className="text-xs text-slate-500">2 hours ago</span>
             </div>
@@ -209,8 +294,12 @@ export function DashboardOverview() {
                 <CheckSquare className="w-4 h-4 text-blue-600" />
               </div>
               <div className="flex-1">
-                <p className="font-medium text-slate-900">Completed task: Design dashboard mockups</p>
-                <p className="text-sm text-slate-600">Took 5 hours to complete</p>
+                <p className="font-medium text-slate-900">
+                  Completed task: Design dashboard mockups
+                </p>
+                <p className="text-sm text-slate-600">
+                  Took 5 hours to complete
+                </p>
               </div>
               <span className="text-xs text-slate-500">Yesterday</span>
             </div>
@@ -220,8 +309,12 @@ export function DashboardOverview() {
                 <TrendingUp className="w-4 h-4 text-purple-600" />
               </div>
               <div className="flex-1">
-                <p className="font-medium text-slate-900">Weekly goal achieved</p>
-                <p className="text-sm text-slate-600">Completed 40 hours this week</p>
+                <p className="font-medium text-slate-900">
+                  Weekly goal achieved
+                </p>
+                <p className="text-sm text-slate-600">
+                  Completed 40 hours this week
+                </p>
               </div>
               <span className="text-xs text-slate-500">2 days ago</span>
             </div>
@@ -229,9 +322,9 @@ export function DashboardOverview() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 function cn(...classes: (string | undefined | null | false)[]): string {
-  return classes.filter(Boolean).join(" ")
+  return classes.filter(Boolean).join(" ");
 }
